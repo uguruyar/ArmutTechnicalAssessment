@@ -58,7 +58,7 @@ services:
     - ./logstash/:/logstash_dir
     command: logstash -f /logstash_dir/logstash.conf 
     depends_on:
-      - Elasticsearch
+      - elasticsearch
     ports:
     - '9600:9600'
     environment:
