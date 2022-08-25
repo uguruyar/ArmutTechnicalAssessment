@@ -25,8 +25,7 @@ namespace Armut.Messaging.Tests
             _mockCollection = new Mock<IMongoCollection<UserMessage>>();
             _mockDatabase.SetupGet(x => x.DatabaseNamespace).Returns(new DatabaseNamespace("test"));
             _mockDatabase.Setup(x => x.GetCollection<UserMessage>(It.IsAny<string>(), It.IsAny<MongoCollectionSettings>())).Returns(_mockCollection.Object);
-
-
+            
             _service = new MessageHistoryService(_mockDatabase.Object);
         }
 
