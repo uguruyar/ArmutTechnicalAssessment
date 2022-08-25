@@ -5,37 +5,33 @@ using Armut.Messaging.Infrastructure.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MongoDB.Driver;
 using Serilog;
-using Serilog.Exceptions;
 using Serilog.Sinks.Elasticsearch;
 using Swashbuckle.AspNetCore.Filters;
 using System.Reflection;
 using System.Text;
 
+namespace Armut.Messaging.Api;
 
 public class Program
 {
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
-
-        ConfigureLogging();
-        builder.Host.UseSerilog();
-
-        // Add services to the container.
-
+        
         builder.Services.AddControllers();
         builder.Services.Configure<RouteOptions>(x => x.LowercaseUrls = true);
-
+        
+        //Dependencies
         builder.Services.AddScoped<IAccountService, AccountService>();
         builder.Services.AddScoped<IUserService, UserService>();
         builder.Services.AddScoped<IChatService, ChatService>();
         builder.Services.AddScoped<MessageHistoryService, MessageHistoryService>();
 
+        // MongoDb Connection
         builder.Services.AddScoped(sp =>
         {
             var connectionString = builder.Configuration.GetConnectionString("MongoDB");
@@ -43,26 +39,27 @@ public class Program
             return mongoClient.GetDatabase("armut");
         });
 
+        // JWT
         var securityKey = builder.Configuration.GetSection("Identity:TokenSecurityKey").Value;
         var keyBytes = Encoding.ASCII.GetBytes(securityKey);
 
         builder.Services.AddAuthentication(x =>
-        {
-            x.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-            x.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-        })
-        .AddJwtBearer(x =>
-        {
-            x.RequireHttpsMetadata = false;
-            x.SaveToken = true;
-            x.TokenValidationParameters = new TokenValidationParameters
             {
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
-                ValidateIssuer = false,
-                ValidateAudience = false
-            };
-        });
+                x.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                x.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer(x =>
+            {
+                x.RequireHttpsMetadata = false;
+                x.SaveToken = true;
+                x.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
+                    ValidateIssuer = false,
+                    ValidateAudience = false
+                };
+            });
 
         builder.Services.AddHttpContextAccessor();
 
@@ -120,7 +117,12 @@ public class Program
         // SeriLog
         builder.Host.UseSerilog((context, config) =>
         {
+            var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            
             config.ReadFrom.Configuration(context.Configuration)
+                .WriteTo.Elasticsearch(ConfigureElasticSink(builder.Configuration, environment))
+                .Enrich.WithProperty("Environment", environment)
+                .ReadFrom.Configuration(builder.Configuration)
                 .Enrich.FromLogContext();
         });
 
@@ -159,34 +161,13 @@ public class Program
 
         app.Run();
 
-        // ES & Log
-        void ConfigureLogging()
+        // ElasticSearch Options
+        ElasticsearchSinkOptions ConfigureElasticSink(ConfigurationManager configuration, string environment)
         {
-            var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-            var configuration = new ConfigurationBuilder()
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                .AddJsonFile(
-                    $"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")}.json",
-                    optional: true)
-                .Build();
-
-            Log.Logger = new LoggerConfiguration()
-                .Enrich.FromLogContext()
-                .Enrich.WithExceptionDetails()
-                .WriteTo.Debug()
-                .WriteTo.Console()
-                .WriteTo.Elasticsearch(ConfigureElasticSink(configuration, environment))
-                .Enrich.WithProperty("Environment", environment)
-                .ReadFrom.Configuration(configuration)
-                .CreateLogger();
-        }
-
-        ElasticsearchSinkOptions ConfigureElasticSink(IConfigurationRoot configuration, string environment)
-        {
-            return new ElasticsearchSinkOptions(new Uri(configuration["ElasticConfiguration:Uri"]))
+            return new ElasticsearchSinkOptions(new Uri(configuration.GetValue<string>("ElasticConfiguration:Uri")))
             {
                 AutoRegisterTemplate = true,
-                IndexFormat = $"{Assembly.GetExecutingAssembly().GetName().Name.ToLower().Replace(".", "-")}-{environment?.ToLower().Replace(".", "-")}-{DateTime.UtcNow:yyyy-MM}"
+                IndexFormat = $"{Assembly.GetExecutingAssembly().GetName().Name?.ToLower().Replace(".", "-")}-{environment?.ToLower().Replace(".", "-")}-{DateTime.UtcNow:yyyy-MM}"
             };
         }
     }
