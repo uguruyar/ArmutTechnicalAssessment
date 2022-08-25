@@ -40,14 +40,14 @@ namespace Armut.Messaging.Tests.Mock
                 },
                 new UserMessage
                 {
-                    Id = "125",
+                    Id = "127",
                     SourceUserName = "burak",
                     TargetUserName = "ugur",
                     Message = "Hello ugur"
                 },
                 new UserMessage
                 {
-                    Id = "126",
+                    Id = "128",
                     SourceUserName = "burak",
                     TargetUserName = "melis",
                     Message = "Hello melis"
