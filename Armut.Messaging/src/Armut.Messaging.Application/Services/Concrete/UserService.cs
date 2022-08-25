@@ -30,8 +30,7 @@ namespace Armut.Messaging.Application.Services.Concrete
                 throw new InvalidOperationException(ErrorMessages.UserNotExists);
             }
 
-            var currentUserId = _httpContextAccessor.HttpContext.User.FindFirstValue(ClaimTypes.Sid);
-            var currentUserName = _httpContextAccessor.HttpContext.User.FindFirstValue(ClaimTypes.Name);
+            var currentUserName = _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.Name);
 
             var isUserExists = await _users.Find(x => x.CurrentUser == currentUserName).AnyAsync(cancellationToken);
 
